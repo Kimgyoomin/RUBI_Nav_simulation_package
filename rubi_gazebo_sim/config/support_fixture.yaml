@@ -1,0 +1,13 @@
+support_fixture:
+  enabled: true
+  pose:
+    x: 0.0285
+    y: 0.0
+    z: 0.264
+  size:
+    x: 1.0
+    y: 0.20
+    z: 0.528
+  body_collision_lower_z: 0.533
+  initial_gap: 0.005
+  leg_inner_clearance_y: 0.103

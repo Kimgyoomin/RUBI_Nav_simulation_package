@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>rubi_description</name>
+  <version>1.0.0</version>
+  <description>ROS 2 description resources for the six-DoF RUBI robot.</description>
+
+  <maintainer email="jang990608@gmail.com">RCLab</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>ros2_livox_simulation</exec_depend>
+  <exec_depend>xacro</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <architecture_independent/>
+  </export>
+</package>

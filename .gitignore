@@ -1,0 +1,126 @@
+# ============================================================
+# External SDK / workspaces
+# ============================================================
+
+/Livox-SDK2/
+/ws_livox/
+/livox_laser_simulation_ros2/
+
+# ============================================================
+# Proprietary robot model files
+# Case-insensitive extension matching
+# ============================================================
+
+*.[uU][rR][dD][fF]
+*.[xX][aA][cC][rR][oO]
+*.[sS][tT][lL]
+
+# 필요하면 다른 모델 파일도 제외
+# *.[dD][aA][eE]
+# *.[oO][bB][jJ]
+# *.[sS][tT][eE][pP]
+# *.[sS][tT][pP]
+# *.[bB][lL][eE][nN][dD]
+# *.[uU][sS][dD]
+# *.[uU][sS][dD][aA]
+# *.[uU][sS][dD][cC]
+
+
+# ============================================================
+# ROS 2 / colcon generated files
+# ============================================================
+
+build/
+install/
+log/
+.colcon/
+compile_commands.json
+
+
+# ============================================================
+# ROS bags and large runtime data
+# ============================================================
+
+*.bag
+*.db3
+*.mcap
+rosbag2_*/
+
+
+# ============================================================
+# Gazebo/runtime generated files
+# ============================================================
+
+*.log
+*.pid
+
+
+# ============================================================
+# Python
+# ============================================================
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+
+# ============================================================
+# IDE / OS
+# ============================================================
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+
+# ============================================================
+# Secrets
+# ============================================================
+
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ============================================================
+# Reinforcement Learning files
+# ============================================================
+*.onnx
+
+# ============================================================
+# Robot/environment geometry and model assets
+# ============================================================
+
+/rubi_description/meshes/
+
+/rubi_gazebo_sim/models/RUBI/
+/rubi_gazebo_sim/models/RUBI_mid360/
+/rubi_gazebo_sim/models/RUBI_mid360_imu/
+
+/rubi_mujoco_sim/models/
+
+# Windows alternate-data-stream remnants
+*Zone.Identifier
+
+
+# ============================================================
+# Learned policy/model binaries
+# ============================================================
+
+/rubi_control_core/models/
+/rubi_sim_tests/models/
+
+
+# ============================================================
+# Bundled ONNX Runtime binary libraries
+# Keep headers and licenses, exclude large shared objects
+# ============================================================
+
+/rubi_control_core/third_party/onnxruntime/lib/
+/rubi_sim_tests/vendor/onnxruntime/lib/
+
+*.so
+*.so.*

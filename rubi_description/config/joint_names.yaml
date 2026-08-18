@@ -1,0 +1,7 @@
+controller_joint_names:
+  - L_HR_JOINT
+  - L_HP_JOINT
+  - L_KN_JOINT
+  - R_HR_JOINT
+  - R_HP_JOINT
+  - R_KN_JOINT

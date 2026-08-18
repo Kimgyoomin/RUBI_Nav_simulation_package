@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>rubi_control_core</name>
+  <version>0.1.0</version>
+  <description>Simulator-independent source-contract controllers for RUBI and RUBI_W.</description>
+
+  <maintainer email="jang990608@gmail.com">RCLab</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <test_depend>ament_cmake_test</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
