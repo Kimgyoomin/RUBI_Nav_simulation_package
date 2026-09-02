@@ -27,6 +27,13 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'policy', default_value=os.path.join(
                 core_share, 'models', 'rubi_gazebo_legacy_policy.onnx')),
+        DeclareLaunchArgument('controller_variant', default_value='legacy'),
+        DeclareLaunchArgument(
+            'terrain_encoder', default_value=os.path.join(
+                core_share, 'models', 'encoder.onnx')),
+        DeclareLaunchArgument(
+            'terrain_policy', default_value=os.path.join(
+                core_share, 'models', 'policy.onnx')),
         DeclareLaunchArgument('gui', default_value='false'),
         DeclareLaunchArgument('paused', default_value='false'),
         DeclareLaunchArgument('verbose', default_value='true'),
@@ -42,6 +49,15 @@ def generate_launch_description():
         SetEnvironmentVariable('GAZEBO_MODEL_DATABASE_URI', ''),
         SetEnvironmentVariable(
             'RUBI_GAZEBO_LEGACY_POLICY', LaunchConfiguration('policy')),
+        SetEnvironmentVariable(
+            'RUBI_GAZEBO_POLICY_VARIANT',
+            LaunchConfiguration('controller_variant')),
+        SetEnvironmentVariable(
+            'RUBI_GAZEBO_TERRAIN_ENCODER',
+            LaunchConfiguration('terrain_encoder')),
+        SetEnvironmentVariable(
+            'RUBI_GAZEBO_TERRAIN_POLICY',
+            LaunchConfiguration('terrain_policy')),
         SetEnvironmentVariable(
             'RUBI_GAZEBO_LEGACY_NAMESPACE', LaunchConfiguration('namespace')),
         SetEnvironmentVariable(

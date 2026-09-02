@@ -50,6 +50,13 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'policy', default_value=os.path.join(
                 core_share, 'models', 'rubi_gazebo_legacy_policy.onnx')),
+        DeclareLaunchArgument('controller_variant', default_value='legacy'),
+        DeclareLaunchArgument(
+            'terrain_encoder', default_value=os.path.join(
+                core_share, 'models', 'encoder.onnx')),
+        DeclareLaunchArgument(
+            'terrain_policy', default_value=os.path.join(
+                core_share, 'models', 'policy.onnx')),
         DeclareLaunchArgument('gui', default_value='false'),
         DeclareLaunchArgument('rviz', default_value='false'),
         DeclareLaunchArgument('use_sim_time', default_value='true'),
@@ -118,6 +125,10 @@ def generate_launch_description():
             launch_arguments={
                 'world': LaunchConfiguration('world'),
                 'policy': LaunchConfiguration('policy'),
+                'controller_variant':
+                    LaunchConfiguration('controller_variant'),
+                'terrain_encoder': LaunchConfiguration('terrain_encoder'),
+                'terrain_policy': LaunchConfiguration('terrain_policy'),
                 'gui': LaunchConfiguration('gui'),
                 'paused': LaunchConfiguration('paused'),
                 'verbose': LaunchConfiguration('verbose'),

@@ -35,6 +35,8 @@
 
 #include "rubi_control_core/gazebo_legacy_policy_adapter.hpp"
 #include "rubi_control_core/gazebo_legacy_policy_runner.hpp"
+#include "rubi_control_core/gazebo_terrain_policy_adapter.hpp"
+#include "rubi_control_core/gazebo_terrain_policy_runner.hpp"
 #include "rubi_control_core/policy_contract.hpp"
 #include "rubi_gazebo_plugins/velocity_input_arbitration.hpp"
 
@@ -52,6 +54,11 @@ constexpr std::size_t kSerialButtonCount = 13;
 constexpr double kJoystickLinearXLimit = 2.0;
 constexpr double kJoystickLinearYLimit = 0.75;
 constexpr double kJoystickAngularZLimit = 1.5;
+
+enum class PolicyVariant {
+  kLegacy,
+  kTerrain,
+};
 
 template <typename Container>
 bool all_finite(const Container& values) {
@@ -99,6 +106,21 @@ VelocityCommand clamp_nav_command(const VelocityCommand& command) {
   };
 }
 
+PolicyVariant parse_policy_variant(const std::string& value) {
+  if (value == "legacy") {
+    return PolicyVariant::kLegacy;
+  }
+  if (value == "terrain") {
+    return PolicyVariant::kTerrain;
+  }
+  throw std::runtime_error(
+      "RUBI_GAZEBO_POLICY_VARIANT must be legacy or terrain");
+}
+
+const char* policy_variant_name(PolicyVariant variant) {
+  return variant == PolicyVariant::kTerrain ? "terrain" : "legacy";
+}
+
 }  // namespace
 
 class RubiGazeboLegacyPolicyPlugin::Impl {
@@ -119,6 +141,14 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
     policy_path_ = environment_or(
         "RUBI_GAZEBO_LEGACY_POLICY",
         core_share + "/models/rubi_gazebo_legacy_policy.onnx");
+    policy_variant_ = parse_policy_variant(
+        environment_or("RUBI_GAZEBO_POLICY_VARIANT", "legacy"));
+    terrain_encoder_path_ = environment_or(
+        "RUBI_GAZEBO_TERRAIN_ENCODER",
+        core_share + "/models/encoder.onnx");
+    terrain_policy_path_ = environment_or(
+        "RUBI_GAZEBO_TERRAIN_POLICY",
+        core_share + "/models/policy.onnx");
     self_test_ = environment_flag("RUBI_GAZEBO_LEGACY_SELF_TEST", false);
     policy_test_ticks_ = std::stoi(environment_or(
         "RUBI_GAZEBO_LEGACY_POLICY_TEST_TICKS", "500"));
@@ -138,14 +168,96 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
     update_connection_ = gazebo::event::Events::ConnectWorldUpdateBegin(
         std::bind(&Impl::OnUpdate, this, std::placeholders::_1));
     RCLCPP_INFO(node_->get_logger(),
-                "LEGACY_PLUGIN_LOAD=PASS policy_contract=32x10_to_7 "
-                "controller_thread=world_update state_order=held_previous_state "
-                "startup_mode=%s joy_topic=/joy input_source=JOYSTICK self_test=%s",
+                "LEGACY_PLUGIN_LOAD=PASS controller_variant=%s "
+                "policy_contract=%s controller_thread=world_update "
+                "state_order=held_previous_state startup_mode=%s joy_topic=/joy "
+                "input_source=JOYSTICK self_test=%s",
+                policy_variant_name(policy_variant_),
+                policy_variant_ == PolicyVariant::kTerrain
+                    ? "33x10_to_32_plus_33_to_6"
+                    : "32x10_to_7",
                 self_test_ ? "torque_off" : "walk_ready",
                 self_test_ ? "true" : "false");
   }
 
  private:
+  bool controller_initialized() const noexcept {
+    return legacy_controller_ || terrain_controller_;
+  }
+
+  rc::ControllerOutput update_controller(const rc::RobotState& state,
+                                         const rc::UserCommand& command) {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? terrain_controller_->update(state, command)
+               : legacy_controller_->update(state, command);
+  }
+
+  rc::ControllerMode controller_mode() const {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? terrain_controller_->mode()
+               : legacy_controller_->mode();
+  }
+
+  bool controller_walk_ready_complete() const {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? terrain_controller_->walk_ready_complete()
+               : legacy_controller_->walk_ready_complete();
+  }
+
+  std::uint64_t controller_inference_count() const {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? terrain_controller_->inference_count()
+               : legacy_controller_->inference_count();
+  }
+
+  std::uint64_t controller_physics_tick_count() const {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? terrain_controller_->physics_tick_count()
+               : legacy_controller_->physics_tick_count();
+  }
+
+  double controller_cycle_time() const {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? terrain_controller_->cycle_time()
+               : legacy_controller_->cycle_time();
+  }
+
+  double controller_cycle_period() const {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? terrain_controller_->cycle_period()
+               : legacy_controller_->cycle_period();
+  }
+
+  bool controller_history_finite() const {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? all_finite(terrain_controller_->history())
+               : all_finite(legacy_controller_->history());
+  }
+
+  bool controller_network_output_finite() const {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? all_finite(terrain_controller_->last_network_output())
+               : all_finite(legacy_controller_->last_network_output());
+  }
+
+  bool controller_history_exact_zero() const {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? exact_zero(terrain_controller_->history())
+               : exact_zero(legacy_controller_->history());
+  }
+
+  bool controller_action_exact_zero() const {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? exact_zero(terrain_controller_->held_action())
+               : exact_zero(legacy_controller_->held_action());
+  }
+
+  double controller_history_maximum() const {
+    return policy_variant_ == PolicyVariant::kTerrain
+               ? maximum_absolute(terrain_controller_->history())
+               : maximum_absolute(legacy_controller_->history());
+  }
+
   void configure_ros_namespace(const sdf::ElementPtr& sdf) {
     const auto requested = environment_or(
         "RUBI_GAZEBO_LEGACY_NAMESPACE", "/rubi_gazebo_legacy");
@@ -360,8 +472,8 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
         controller_fault_active_ || command_.reset || command_.emergency_stop ||
         command_.requested_mode == rc::ControllerMode::kTorqueOff ||
         command_.requested_mode == rc::ControllerMode::kEmergencyStop ||
-        controller_->mode() == rc::ControllerMode::kTorqueOff ||
-        controller_->mode() == rc::ControllerMode::kEmergencyStop;
+        controller_mode() == rc::ControllerMode::kTorqueOff ||
+        controller_mode() == rc::ControllerMode::kEmergencyStop;
     const auto decision = velocity_input_.select(
         {command_.linear_x, command_.linear_y, command_.angular_z},
         controller_disabled, VelocityInputArbitrator::SteadyClock::now(),
@@ -369,9 +481,14 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
     if (decision.nav_timeout_started) {
       ++velocity_command_sequence_;
     }
-    const auto selected = velocity_input_.source() == VelocityInputSource::kNav2
-                              ? clamp_nav_command(decision.command)
-                              : decision.command;
+    auto selected = decision.command;
+    if (velocity_input_.source() == VelocityInputSource::kNav2) {
+      selected = policy_variant_ == PolicyVariant::kTerrain
+                     ? terrain_navigation_command(decision.command)
+                     : clamp_nav_command(decision.command);
+    } else if (policy_variant_ == PolicyVariant::kTerrain) {
+      selected = terrain_joystick_command(decision.command);
+    }
     auto command = command_;
     command.linear_x = selected.linear_x;
     command.linear_y = selected.linear_y;
@@ -382,8 +499,8 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
   }
 
   void queue_source_policy_transition(const rc::UserCommand& consumed_command) {
-    if (!controller_->walk_ready_complete() ||
-        controller_->mode() != rc::ControllerMode::kWalkReady) {
+    if (!controller_walk_ready_complete() ||
+        controller_mode() != rc::ControllerMode::kWalkReady) {
       return;
     }
     std::lock_guard<std::mutex> lock(command_mutex_);
@@ -424,8 +541,21 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
   }
 
   void initialize_controller() {
+    if (policy_variant_ == PolicyVariant::kTerrain) {
+      auto policy = std::make_shared<rc::GazeboTerrainPolicyRunner>(
+          terrain_encoder_path_, terrain_policy_path_);
+      terrain_controller_ =
+          std::make_unique<rc::GazeboTerrainPolicyAdapter>(std::move(policy));
+      RCLCPP_INFO(node_->get_logger(),
+                  "TERRAIN_POLICY_LOAD=PASS encoder=%s policy=%s "
+                  "shapes=330_to_32/65_to_6 names=mlp_input/mlp_output "
+                  "dtype=float32 history_length=10",
+                  terrain_encoder_path_.c_str(), terrain_policy_path_.c_str());
+      return;
+    }
+
     auto policy = std::make_shared<rc::GazeboLegacyPolicyRunner>(policy_path_);
-    controller_ =
+    legacy_controller_ =
         std::make_unique<rc::GazeboLegacyPolicyAdapter>(std::move(policy));
     RCLCPP_INFO(node_->get_logger(),
                 "LEGACY_POLICY_LOAD=PASS path=%s shape=320_to_7 "
@@ -452,9 +582,10 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
     action_publisher_->publish(action);
     std_msgs::msg::String status;
     std::ostringstream stream;
-    stream << "variant=legacy_policy mode=" << static_cast<int>(output.mode)
-           << " inference_count=" << controller_->inference_count()
-           << " cycle_period=" << controller_->cycle_period()
+    stream << "variant=" << policy_variant_name(policy_variant_) << "_policy mode="
+           << static_cast<int>(output.mode)
+           << " inference_count=" << controller_inference_count()
+           << " cycle_period=" << controller_cycle_period()
            << " fault=" << (output.faulted ? output.fault_reason : "none");
     status.data = stream.str();
     status_publisher_->publish(status);
@@ -476,7 +607,7 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
                    "LEGACY_G4_UNSUPPORTED=BLOCKED tick=%d inference=%llu "
                    "reason=%s safe_zero=true",
                    stage_tick_, static_cast<unsigned long long>(
-                       controller_->inference_count()),
+                       controller_inference_count()),
                    output.fault_reason.c_str());
       stage_ = 60;
       stage_tick_ = 0;
@@ -486,7 +617,7 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
     }
     if (stage_ == 1 && stage_tick_ == 250) {
       require(exact_zero(commanded_effort_), "startup torque-off not zero");
-      require(controller_->inference_count() == 0,
+      require(controller_inference_count() == 0,
               "inference ran in startup torque-off");
       RCLCPP_INFO(node_->get_logger(),
                   "LEGACY_G1 PASS torque_off=0.5s six_SetForce0_zero=true");
@@ -495,7 +626,7 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
       test_command_.requested_mode = rc::ControllerMode::kWalkReady;
       ++test_command_.mode_sequence;
     } else if (stage_ == 3 && stage_tick_ == 300) {
-      require(controller_->walk_ready_complete(),
+      require(controller_walk_ready_complete(),
               "walk-ready did not complete");
       require(all_finite(output.effort), "walk-ready effort nonfinite");
       RCLCPP_INFO(node_->get_logger(),
@@ -503,29 +634,31 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
                   "explicit_policy_enable=true");
       stage_ = 4;
       stage_tick_ = 0;
-      inference_stage_start_ = controller_->inference_count();
+      inference_stage_start_ = controller_inference_count();
       test_command_.requested_mode = rc::ControllerMode::kPolicyOn;
       ++test_command_.mode_sequence;
     } else if (stage_ == 4 && stage_tick_ == policy_test_ticks_) {
       const auto inference_delta =
-          controller_->inference_count() - inference_stage_start_;
+          controller_inference_count() - inference_stage_start_;
       require(inference_delta ==
                   static_cast<std::uint64_t>(policy_test_ticks_ / 5),
               "legacy inference decimation mismatch");
       require(all_finite(output.action) && all_finite(output.effort) &&
                   all_finite(state.joint_position) &&
-                  all_finite(controller_->history()) &&
-                  all_finite(controller_->last_network_output()),
+                  controller_history_finite() &&
+                  controller_network_output_finite(),
               "legacy policy closed loop nonfinite");
       RCLCPP_INFO(node_->get_logger(),
                   "LEGACY_G4 PASS ticks=%d inference=%llu rate=100Hz "
-                  "dims=32/320/7 action_max=%.9g history_max=%.9g "
+                  "dims=%s action_max=%.9g history_max=%.9g "
                   "cycle_period=%.9g",
                   policy_test_ticks_, static_cast<unsigned long long>(
                       inference_delta),
+                  policy_variant_ == PolicyVariant::kTerrain
+                      ? "33/330/32/65/6"
+                      : "32/320/7",
                   maximum_absolute(output.action),
-                  maximum_absolute(controller_->history()),
-                  controller_->cycle_period());
+                  controller_history_maximum(), controller_cycle_period());
       stage_ = 5;
       stage_tick_ = 0;
       test_command_.linear_x = 0.1;
@@ -554,11 +687,13 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
       test_command_.reset = true;
       ++test_command_.reset_sequence;
     } else if (stage_ == 7 && stage_tick_ == 1) {
-      require(exact_zero(controller_->history()) &&
-                  exact_zero(controller_->held_action()) &&
-                  controller_->cycle_time() == 0.0 &&
-                  controller_->cycle_period() == 0.4 &&
-                  controller_->mode() == rc::ControllerMode::kTorqueOff &&
+      const double reset_cycle_period =
+          policy_variant_ == PolicyVariant::kTerrain ? 0.5 : 0.4;
+      require(controller_history_exact_zero() &&
+                  controller_action_exact_zero() &&
+                  controller_cycle_time() == 0.0 &&
+                  controller_cycle_period() == reset_cycle_period &&
+                  controller_mode() == rc::ControllerMode::kTorqueOff &&
                   exact_zero(commanded_effort_),
               "legacy reset state mismatch");
       RCLCPP_INFO(node_->get_logger(),
@@ -570,8 +705,8 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
       self_test_complete_ = true;
       world_->SetPaused(true);
     } else if (stage_ == 60 && stage_tick_ == 1) {
-      require(exact_zero(controller_->history()) &&
-                  exact_zero(controller_->held_action()) &&
+      require(controller_history_exact_zero() &&
+                  controller_action_exact_zero() &&
                   exact_zero(commanded_effort_),
               "legacy blocked-path reset failed");
       stage_ = 61;
@@ -597,8 +732,8 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
       stage_ = 63;
       stage_tick_ = 0;
     } else if (stage_ == 63 && stage_tick_ == 1) {
-      require(exact_zero(controller_->history()) &&
-                  exact_zero(controller_->held_action()) &&
+      require(controller_history_exact_zero() &&
+                  controller_action_exact_zero() &&
                   exact_zero(commanded_effort_),
               "legacy blocked-path final reset failed");
       RCLCPP_ERROR(node_->get_logger(),
@@ -618,7 +753,7 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
         write_effort(rc::JointArray{});
         return;
       }
-      if (!controller_) {
+      if (!controller_initialized()) {
         initialize_controller();
       }
       const double sim_time = info.simTime.Double();
@@ -638,7 +773,7 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
 
       // Active ROS 1 order: inference/PD/write use held state, then encoders and
       // decimated IMU are sampled for the next update.
-      const auto output = controller_->update(held_state_, command);
+      const auto output = update_controller(held_state_, command);
       write_effort(output.effort);
       if (!self_test_) {
         queue_source_policy_transition(command);
@@ -649,7 +784,7 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
       }
       ++adapter_tick_;
 
-      if (controller_->physics_tick_count() % 5 == 0) {
+      if (controller_physics_tick_count() % 5 == 0) {
         publish(held_state_, output);
       }
       if (output.faulted && !fault_logged_) {
@@ -658,9 +793,9 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
                      "LEGACY_FIRST_FAULT sim_time=%.9f inference=%llu "
                      "reason=%s history_max=%.9g safe_zero=true",
                      sim_time, static_cast<unsigned long long>(
-                         controller_->inference_count()),
+                         controller_inference_count()),
                      output.fault_reason.c_str(),
-                     maximum_absolute(controller_->history()));
+                     controller_history_maximum());
       }
       if (output.faulted) {
         std::lock_guard<std::mutex> lock(command_mutex_);
@@ -699,8 +834,12 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
   gazebo::event::ConnectionPtr update_connection_;
   std::array<gazebo::physics::JointPtr, rc::kJointCount> joints_{};
   gazebo::sensors::ImuSensorPtr imu_;
-  std::unique_ptr<rc::GazeboLegacyPolicyAdapter> controller_;
+  std::unique_ptr<rc::GazeboLegacyPolicyAdapter> legacy_controller_;
+  std::unique_ptr<rc::GazeboTerrainPolicyAdapter> terrain_controller_;
+  PolicyVariant policy_variant_{PolicyVariant::kLegacy};
   std::string policy_path_;
+  std::string terrain_encoder_path_;
+  std::string terrain_policy_path_;
   bool self_test_{false};
   bool self_test_complete_{false};
   bool fault_logged_{false};

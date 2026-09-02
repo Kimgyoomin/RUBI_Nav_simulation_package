@@ -108,4 +108,25 @@ TEST(VelocityInputArbitrator, SafetyZeroOverridesAllSources) {
   EXPECT_DOUBLE_EQ(decision.command.angular_z, 0.0);
 }
 
+TEST(VelocityInputArbitrator, TerrainNavigationCommandMatchesTrainingAdapter) {
+  const auto middle =
+      rgp::terrain_navigation_command({0.25, -0.25, 0.5});
+  EXPECT_DOUBLE_EQ(middle.linear_x, 0.5);
+  EXPECT_DOUBLE_EQ(middle.linear_y, -0.375);
+  EXPECT_DOUBLE_EQ(middle.angular_z, 0.75);
+
+  const auto saturated =
+      rgp::terrain_navigation_command({2.0, -2.0, 3.0});
+  EXPECT_DOUBLE_EQ(saturated.linear_x, 1.0);
+  EXPECT_DOUBLE_EQ(saturated.linear_y, -0.75);
+  EXPECT_DOUBLE_EQ(saturated.angular_z, 1.5);
+}
+
+TEST(VelocityInputArbitrator, TerrainJoystickKeepsLegacyAxesAtBoundary) {
+  const auto command = rgp::terrain_joystick_command({2.0, -0.75, 1.5});
+  EXPECT_DOUBLE_EQ(command.linear_x, 1.0);
+  EXPECT_DOUBLE_EQ(command.linear_y, -0.75);
+  EXPECT_DOUBLE_EQ(command.angular_z, 1.5);
+}
+
 }  // namespace

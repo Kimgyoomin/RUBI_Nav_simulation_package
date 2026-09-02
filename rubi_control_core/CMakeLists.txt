@@ -23,6 +23,8 @@ add_library(${PROJECT_NAME} SHARED
   src/controller.cpp
   src/gazebo_legacy_policy_adapter.cpp
   src/gazebo_legacy_policy_runner.cpp
+  src/gazebo_terrain_policy_adapter.cpp
+  src/gazebo_terrain_policy_runner.cpp
   src/policy_runner.cpp
   src/rubi_w_policy_adapter.cpp
   src/rubi_w_policy_runner.cpp
@@ -81,8 +83,8 @@ if(BUILD_TESTING)
   target_compile_features(rubi_control_core_test PRIVATE cxx_std_17)
   target_link_libraries(rubi_control_core_test PRIVATE ${PROJECT_NAME})
   target_compile_definitions(rubi_control_core_test PRIVATE
-    RUBI_ENCODER_MODEL="${CMAKE_CURRENT_SOURCE_DIR}/models/encoder.onnx"
-    RUBI_POLICY_MODEL="${CMAKE_CURRENT_SOURCE_DIR}/models/policy.onnx"
+    RUBI_ENCODER_MODEL="${CMAKE_CURRENT_SOURCE_DIR}/models/rubi_plane_onnx/encoder.onnx"
+    RUBI_POLICY_MODEL="${CMAKE_CURRENT_SOURCE_DIR}/models/rubi_plane_onnx/policy.onnx"
   )
 
   set(_core_test_cases
@@ -139,6 +141,29 @@ if(BUILD_TESTING)
     add_test(NAME legacy_gazebo_${_case}
       COMMAND rubi_gazebo_legacy_core_test --case ${_case})
     set_tests_properties(legacy_gazebo_${_case} PROPERTIES TIMEOUT 20)
+  endforeach()
+
+  add_executable(rubi_gazebo_terrain_core_test
+    test/gazebo_terrain_policy_adapter_test.cpp)
+  target_compile_features(rubi_gazebo_terrain_core_test PRIVATE cxx_std_17)
+  target_link_libraries(rubi_gazebo_terrain_core_test PRIVATE ${PROJECT_NAME})
+  target_compile_definitions(rubi_gazebo_terrain_core_test PRIVATE
+    RUBI_TERRAIN_ENCODER_MODEL="${CMAKE_CURRENT_SOURCE_DIR}/models/encoder.onnx"
+    RUBI_TERRAIN_POLICY_MODEL="${CMAKE_CURRENT_SOURCE_DIR}/models/policy.onnx"
+  )
+  set(_terrain_core_test_cases
+    onnx_contract_330_to_32_65_to_6
+    observation_actor_history_and_policy_order
+    history_oldest_to_newest
+    action_torque_limit_clipping
+    policy_decimation_five
+    policy_before_walk_ready_is_rejected
+    reset_and_nonfinite_safety
+  )
+  foreach(_case IN LISTS _terrain_core_test_cases)
+    add_test(NAME terrain_gazebo_${_case}
+      COMMAND rubi_gazebo_terrain_core_test --case ${_case})
+    set_tests_properties(terrain_gazebo_${_case} PROPERTIES TIMEOUT 20)
   endforeach()
 
   add_executable(rubi_w_control_core_test

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -25,6 +26,29 @@ struct VelocityInputDecision {
   bool nav_timeout_started{false};
   bool nav_command_available{false};
 };
+
+inline VelocityCommand terrain_navigation_command(
+    const VelocityCommand& command) noexcept {
+  constexpr double kLinearXLimit = 0.5;
+  constexpr double kLinearYLimit = 0.5;
+  constexpr double kAngularZLimit = 1.0;
+  constexpr double kTerrainLinearXScale = 1.0;
+  constexpr double kTerrainLinearYScale = 0.75;
+  constexpr double kTerrainAngularZScale = 1.5;
+  return {
+      std::clamp(command.linear_x / kLinearXLimit, -1.0, 1.0) *
+          kTerrainLinearXScale,
+      std::clamp(command.linear_y / kLinearYLimit, -1.0, 1.0) *
+          kTerrainLinearYScale,
+      std::clamp(command.angular_z / kAngularZLimit, -1.0, 1.0) *
+          kTerrainAngularZScale,
+  };
+}
+
+inline VelocityCommand terrain_joystick_command(
+    const VelocityCommand& command) noexcept {
+  return {0.5 * command.linear_x, command.linear_y, command.angular_z};
+}
 
 inline bool button_is_pressed(const std::vector<int32_t>& buttons,
                               std::size_t index) noexcept {
