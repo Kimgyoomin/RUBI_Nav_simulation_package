@@ -43,6 +43,16 @@
               filename="librubi_gazebo_legacy_policy_plugin.so">
         <ros><namespace>/rubi_gazebo_legacy</namespace></ros>
       </plugin>
+      <plugin name="gazebo_ros_p3d" filename="libgazebo_ros_p3d.so">
+        <ros>
+          <namespace>/</namespace>
+          <remapping>odom:=ground_truth/odom</remapping>
+        </ros>
+        <frame_name>world</frame_name>
+        <body_name>BODY</body_name>
+        <update_rate>30.0</update_rate>
+        <gaussian_noise>0.0</gaussian_noise>
+      </plugin>
     </include>
 
     <!-- Static navigation test environment -->
