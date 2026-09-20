@@ -1,0 +1,12 @@
+{
+  "id": "rubi-hpp-pilot-v1",
+  "status": "draft",
+  "responseApi": "",
+  "bundleBaseUrl": "",
+  "scenarios": [
+    {"height": 0.05, "detour": 0.4, "speed": 0.3},
+    {"height": 0.05, "detour": 0.8, "speed": 0.3},
+    {"height": 0.05, "detour": 1.2, "speed": 0.3},
+    {"height": 0.05, "detour": 1.6, "speed": 0.3}
+  ]
+}
