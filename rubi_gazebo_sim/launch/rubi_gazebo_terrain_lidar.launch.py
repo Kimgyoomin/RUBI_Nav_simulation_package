@@ -15,7 +15,15 @@ def generate_launch_description():
         sim_share, 'launch',
         'rubi_gazebo_legacy_policy_mid360_imu.launch.py')
 
+    default_world = os.path.join(
+        sim_share,
+        'worlds',
+        'rubi_navigation_mid360_imu.world')
+
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'world',
+            default_value=default_world),
         DeclareLaunchArgument(
             'encoder', default_value=os.path.join(
                 core_share, 'models', 'encoder.onnx')),
@@ -32,6 +40,8 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(integrated_launch),
             launch_arguments={
+                'world': LaunchConfiguration('world'),
+                
                 'controller_variant': 'terrain',
                 'terrain_encoder': LaunchConfiguration('encoder'),
                 'terrain_policy': LaunchConfiguration('policy'),

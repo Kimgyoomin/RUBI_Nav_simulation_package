@@ -417,13 +417,6 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
     joint_state_publisher_ =
         node_->create_publisher<sensor_msgs::msg::JointState>(
             "joint_states", 10);
-
-    // High-rate actuator-work logging.
-    // Gazebo physics dt = 0.002 s -> 500 Hz in simulation time.
-    joint_state_500hz_publisher_ =
-        node_->create_publisher<sensor_msgs::msg::JointState>(
-            "joint_states_500hz", 100);
-
     action_publisher_ =
         node_->create_publisher<std_msgs::msg::Float64MultiArray>(
             "action", 10);
@@ -545,39 +538,6 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
     for (std::size_t i = 0; i < rc::kJointCount; ++i) {
       joints_[i]->SetForce(0, effort[i]);
     }
-  }
-
-  void publish_joint_state_500hz(const rc::RobotState& state) {
-    sensor_msgs::msg::JointState joints;
-
-    joints.header.stamp = rclcpp::Time(
-        static_cast<std::int64_t>(
-            state.sim_time_sec * 1.0e9),
-        RCL_ROS_TIME);
-
-    const auto& names = rc::canonical_joint_order();
-
-    joints.name.assign(
-        names.begin(),
-        names.end());
-
-    joints.position.assign(
-        state.joint_position.begin(),
-        state.joint_position.end());
-
-    joints.velocity.assign(
-        state.joint_velocity.begin(),
-        state.joint_velocity.end());
-
-    // ODE-reported applied joint effort.
-    // read_joints_into_held_state() obtains this from Joint::GetForce(),
-    // which returns the user-applied effort saved by ODE after SetForce()
-    // effort/velocity-limit truncation.
-    joints.effort.assign(
-        state.measured_effort.begin(),
-        state.measured_effort.end());
-
-    joint_state_500hz_publisher_->publish(joints);
   }
 
   void initialize_controller() {
@@ -819,13 +779,6 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
         queue_source_policy_transition(command);
       }
       read_joints_into_held_state(sim_time);
-
-      // Mechanical-work logging at every Gazebo physics update.
-      // max_step_size = 0.002 s -> 500 Hz simulation-time sampling.
-      if (!self_test_) {
-        publish_joint_state_500hz(held_state_);
-      }
-
       if (adapter_tick_ % 5 == 0) {
         read_imu_into_held_state();
       }
@@ -911,10 +864,6 @@ class RubiGazeboLegacyPolicyPlugin::Impl {
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_subscription_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr
       joint_state_publisher_;
-
-  rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr
-      joint_state_500hz_publisher_;
-
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr
       action_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_publisher_;
